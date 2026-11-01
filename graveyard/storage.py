@@ -37,6 +37,19 @@ def entries_path(root: Path) -> Path:
     return store_dir(root) / "entries.jsonl"
 
 
+def init_store(root: Path, private: bool = False) -> None:
+    """Safe to run repeatedly. Git reads these per folder, so the repo's own files stay untouched."""
+    folder = store_dir(root)
+    folder.mkdir(parents=True, exist_ok=True)
+    entries_path(root).touch()
+    # Both branches append at the end of the file, which git would call a conflict. Union keeps both.
+    attributes = folder / ".gitattributes"
+    if not attributes.exists():
+        attributes.write_text("entries.jsonl merge=union\n", encoding="utf-8")
+    if private:
+        (folder / ".gitignore").write_text("*\n", encoding="utf-8")
+
+
 @contextmanager
 def _locked(root: Path):
     """Hold an exclusive lock so two agents can't claim the same id or clobber a revive."""

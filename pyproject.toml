@@ -12,5 +12,8 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest"]
 
+[project.scripts]
+graveyard = "graveyard.cli:main"
+
 [tool.setuptools.packages.find]
 include = ["graveyard*"]
