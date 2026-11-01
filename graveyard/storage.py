@@ -118,8 +118,20 @@ def append_entry(root: Path, attempt: str, why_failed: str, **fields) -> Entry:
     return entry
 
 
-def update_entry(root: Path, entry_id: int, **changes) -> Entry:
-    """Change one entry and leave every other line byte-for-byte, even ones we can't parse."""
+def revive_entry(root: Path, entry_id: int, note: str) -> Entry:
+    if not note.strip():
+        raise ValueError("reviving needs a note saying what changed")
+
+    def change(data):
+        # Keep any earlier note: it may be the reason this got revived.
+        earlier = data.get("note")
+        return {"status": "revived", "note": f"{earlier} | {note}" if earlier else note}
+
+    return update_entry(root, entry_id, change)
+
+
+def update_entry(root: Path, entry_id: int, change) -> Entry:
+    """Apply change(old_fields) -> new_fields to one entry under the lock. Every other line stays byte-for-byte, even ones we can't parse."""
     path = entries_path(root)
     with _locked(root):
         lines = _read_lines(path)
@@ -129,7 +141,8 @@ def update_entry(root: Path, entry_id: int, **changes) -> Entry:
         # Branches that each added an entry can merge into two entries with one id.
         if len(matches) > 1:
             raise ValueError(f"id {entry_id} appears {len(matches)} times; fix {path} by hand")
-        merged = {**_parse(lines[matches[0]]), **changes}
+        current = _parse(lines[matches[0]])
+        merged = {**current, **change(current)}
         entry = Entry.from_dict(merged)  # validates before anything touches the disk
         lines[matches[0]] = _dumps(merged)
         _replace_file(path, lines)

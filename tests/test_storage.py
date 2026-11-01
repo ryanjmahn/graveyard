@@ -11,8 +11,13 @@ from graveyard.storage import (
     entries_path,
     find_repo_root,
     read_entries,
+    revive_entry,
     update_entry,
 )
+
+
+def update(root, entry_id, **changes):
+    return update_entry(root, entry_id, lambda _: changes)
 
 
 def add(root, n=1):
@@ -102,7 +107,7 @@ def test_update_touches_only_the_target_line(tmp_path):
         f.write('not json\n{"id": 4, "attempt": "a", "why_failed": "b", "from_the_future": 1}\n')
     before = path.read_text().splitlines()
 
-    updated = update_entry(tmp_path, 2, status="revived", note="works on torch 2.3")
+    updated = update(tmp_path, 2, status="revived", note="works on torch 2.3")
 
     after = path.read_text().splitlines()
     assert (updated.status, updated.note) == ("revived", "works on torch 2.3")
@@ -115,7 +120,7 @@ def test_update_keeps_unknown_fields_on_the_target(tmp_path):
     path = entries_path(tmp_path)
     data = json.loads(path.read_text())
     path.write_text(json.dumps({**data, "from_the_future": 1}) + "\n")
-    update_entry(tmp_path, 1, note="n")
+    update(tmp_path, 1, note="n")
     assert json.loads(path.read_text())["from_the_future"] == 1
 
 
@@ -123,7 +128,7 @@ def test_update_keeps_file_permissions(tmp_path):
     add(tmp_path)
     path = entries_path(tmp_path)
     path.chmod(0o644)
-    update_entry(tmp_path, 1, note="n")
+    update(tmp_path, 1, note="n")
     assert stat.S_IMODE(path.stat().st_mode) == 0o644
 
 
@@ -131,14 +136,14 @@ def test_update_rejects_invalid_change_without_touching_file(tmp_path):
     add(tmp_path)
     before = entries_path(tmp_path).read_text()
     with pytest.raises(ValueError):
-        update_entry(tmp_path, 1, status="zombie")
+        update(tmp_path, 1, status="zombie")
     assert entries_path(tmp_path).read_text() == before
 
 
 def test_update_missing_id(tmp_path):
     add(tmp_path)
     with pytest.raises(KeyError):
-        update_entry(tmp_path, 99, note="n")
+        update(tmp_path, 99, note="n")
 
 
 def test_update_refuses_duplicate_ids(tmp_path):
@@ -147,7 +152,7 @@ def test_update_refuses_duplicate_ids(tmp_path):
     before = path.read_text()
     path.write_text(before + before)
     with pytest.raises(ValueError, match="2 times"):
-        update_entry(tmp_path, 1, note="n")
+        update(tmp_path, 1, note="n")
     assert path.read_text() == before + before
 
 
@@ -157,8 +162,28 @@ def test_failed_replace_leaves_no_temp_file(tmp_path, monkeypatch):
         raise OSError("disk full")
     monkeypatch.setattr("graveyard.storage.os.replace", boom)
     with pytest.raises(OSError):
-        update_entry(tmp_path, 1, note="n")
+        update(tmp_path, 1, note="n")
     assert [p.name for p in entries_path(tmp_path).parent.iterdir()] == ["entries.jsonl"]
+
+
+def test_revive_sets_status_and_note(tmp_path):
+    add(tmp_path)
+    entry = revive_entry(tmp_path, 1, "works on torch 2.3")
+    assert (entry.status, entry.note) == ("revived", "works on torch 2.3")
+    assert read_entries(tmp_path) == [entry]
+
+
+def test_revive_keeps_earlier_notes(tmp_path):
+    append_entry(tmp_path, "a", "b", note="might work after upgrading torch")
+    revive_entry(tmp_path, 1, "it did")
+    assert revive_entry(tmp_path, 1, "still does").note == "might work after upgrading torch | it did | still does"
+
+
+def test_revive_needs_a_note(tmp_path):
+    add(tmp_path)
+    with pytest.raises(ValueError):
+        revive_entry(tmp_path, 1, "  ")
+    assert read_entries(tmp_path)[0].status == "dead"
 
 
 def _worker(root):

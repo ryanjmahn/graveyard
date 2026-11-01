@@ -1,11 +1,12 @@
 import io
+import re
 import subprocess
 
 import pytest
 
 from graveyard import cli, display
 from graveyard.models import Entry
-from graveyard.storage import append_entry, entries_path, read_entries, store_dir, update_entry
+from graveyard.storage import append_entry, entries_path, read_entries, revive_entry, store_dir
 
 
 @pytest.fixture
@@ -215,10 +216,116 @@ def test_show_missing_id(repo, capsys):
 
 def test_show_revived_entry(repo, capsys):
     append_entry(repo, "a", "b")
-    update_entry(repo, 1, status="revived", note="works now")
+    revive_entry(repo, 1, "works now")
     cli.main(["show", "1"])
     out = capsys.readouterr().out
     assert "🌱 #1" in out and "(revived)" in out and "works now" in out
+
+
+# search
+
+
+def test_search_prints_best_match_first(repo, capsys):
+    append_entry(repo, "mentions numpy in passing", "x")
+    append_entry(repo, "unrelated title", "x", tags=["numpy"])
+    assert cli.main(["search", "NumPy"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("unrelated title") < out.index("mentions numpy")
+
+
+def test_search_joins_words_and_applies_filters(repo, capsys):
+    append_entry(repo, "numpy bump", "x", tags=["deps"], area="requirements.txt")
+    append_entry(repo, "numpy cast", "x", tags=["types"], area="src/api")
+    cli.main(["search", "numpy", "bump", "--tag", "deps", "--tag", "ci"])
+    out = capsys.readouterr().out
+    assert "numpy bump" in out and "numpy cast" not in out
+    cli.main(["search", "numpy", "--area", "src"])
+    out = capsys.readouterr().out
+    assert "numpy cast" in out and "numpy bump" not in out
+
+
+def test_search_no_match(repo, capsys):
+    append_entry(repo, "a thing", "x")
+    assert cli.main(["search", "zzz"]) == 0
+    assert 'Nothing buried for "zzz"' in capsys.readouterr().out
+
+
+def test_search_limit_says_what_it_hid(repo, capsys):
+    for i in range(3):
+        append_entry(repo, f"numpy {i}", "x")
+    cli.main(["search", "numpy", "-n", "1"])
+    assert "Showing 1 of 3" in capsys.readouterr().out
+
+
+# revive
+
+
+def test_revive_with_flag(repo, capsys):
+    append_entry(repo, "a", "b")
+    assert cli.main(["revive", "1", "--note", "works on torch 2.3"]) == 0
+    assert "🌱 #1" in capsys.readouterr().out
+    assert read_entries(repo)[0].status == "revived"
+
+
+def test_revive_asks_for_note(repo, monkeypatch):
+    append_entry(repo, "a", "b")
+    monkeypatch.setattr("sys.stdin", io.StringIO("\nworks now\n"))
+    assert cli.main(["revive", "1"]) == 0
+    assert read_entries(repo)[0].note == "works now"
+
+
+def test_revive_with_no_input_changes_nothing(repo, monkeypatch, capsys):
+    append_entry(repo, "a", "b")
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    assert cli.main(["revive", "1"]) == 2
+    assert read_entries(repo)[0].status == "dead"
+
+
+def test_revive_blank_note_rejected(repo, capsys):
+    append_entry(repo, "a", "b")
+    assert cli.main(["revive", "1", "--note", " "]) == 1
+    assert "needs a note" in capsys.readouterr().err
+
+
+def test_revive_missing_id(repo, capsys):
+    assert cli.main(["revive", "9", "--note", "n"]) == 1
+    assert "no entry #9" in capsys.readouterr().err
+
+
+def test_revive_duplicate_id_reports_cleanly(repo, capsys):
+    append_entry(repo, "a", "b")
+    path = entries_path(repo)
+    path.write_text(path.read_text() * 2)
+    assert cli.main(["revive", "1", "--note", "n"]) == 1
+    assert "2 times" in capsys.readouterr().err
+
+
+# stats
+
+
+def test_stats(repo, capsys):
+    append_entry(repo, "a", "x", tags=["numpy", "Torch"], area="deps · requirements.txt")
+    append_entry(repo, "b", "x", tags=["torch"], area="requirements.txt, src/api.py")
+    append_entry(repo, "c", "x")
+    revive_entry(repo, 3, "fine now")
+    assert cli.main(["stats"]) == 0
+    out = capsys.readouterr().out
+    assert "2 dead" in out and "1 revived" in out
+    assert re.search(r"torch +▇▇ 2", out) and re.search(r"numpy +▇ 1", out)
+    assert re.search(r"requirements\.txt +▇▇ 2", out) and re.search(r"src/api\.py +▇ 1", out)
+    assert out.index("torch") < out.index("numpy")
+
+
+def test_stats_without_tags_or_areas(repo, capsys):
+    append_entry(repo, "a", "x")
+    cli.main(["stats"])
+    out = capsys.readouterr().out
+    assert "1 dead" in out and "tags" not in out and "haunted" not in out
+
+
+def test_stats_empty(repo, capsys):
+    assert cli.main(["stats"]) == 0
+    assert "No dead ends yet" in capsys.readouterr().out
 
 
 # display

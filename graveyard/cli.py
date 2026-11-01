@@ -19,6 +19,12 @@ def _print_entries(entries, full=False):
     print("\n\n".join(display.format_entry(e, full=full, color=color) for e in entries))
 
 
+def _print_limited(entries, limit):
+    _print_entries(entries[:limit])
+    if len(entries) > limit:
+        print(f"\nShowing {limit} of {len(entries)}. Use --limit to see more.")
+
+
 def cmd_init(args):
     root = storage.find_repo_root()
     existed = storage.store_dir(root).exists()
@@ -81,9 +87,37 @@ def cmd_list(args):
     if not entries:
         print("🌱 No dead ends found.")
         return
-    _print_entries(entries[: args.limit])
-    if len(entries) > args.limit:
-        print(f"\nShowing {args.limit} of {len(entries)}. Use --limit to see more.")
+    _print_limited(entries, args.limit)
+
+
+def cmd_search(args):
+    root = storage.find_repo_root()
+    query = " ".join(args.query)
+    entries = search.search_entries(storage.read_entries(root), query, area=args.area, tags=args.tag)
+    if not entries:
+        print(f'🌱 Nothing buried for "{query}".')
+        return
+    _print_limited(entries, args.limit)
+
+
+def cmd_revive(args):
+    root = storage.find_repo_root()
+    try:
+        note = args.note if args.note is not None else _ask("What changed? (note)", required=True)
+    except EOFError:
+        print("graveyard: --note is required when there's no one to ask.", file=sys.stderr)
+        return 2
+    try:
+        entry = storage.revive_entry(root, args.id, note)
+    except KeyError:
+        print(f"graveyard: no entry #{args.id}", file=sys.stderr)
+        return 1
+    _print_entries([entry])
+
+
+def cmd_stats(args):
+    entries = storage.read_entries(storage.find_repo_root())
+    print(display.format_stats(entries) if entries else "🌱 No dead ends yet.")
 
 
 def cmd_show(args):
@@ -130,6 +164,21 @@ def _parser():
     show = commands.add_parser("show", help="show one entry in full")
     show.add_argument("id", type=int)
     show.set_defaults(func=cmd_show)
+
+    search_ = commands.add_parser("search", help="find entries by keyword, best match first")
+    search_.add_argument("query", nargs="+", help="keywords; no quotes needed")
+    search_.add_argument("--tag", action="append", help="only entries with this tag (repeat for any of several)")
+    search_.add_argument("--area", help="only entries whose area contains this")
+    search_.add_argument("-n", "--limit", type=_positive_int, default=20, help="how many to show (default 20)")
+    search_.set_defaults(func=cmd_search)
+
+    revive = commands.add_parser("revive", help="mark an entry as revived, because it later worked")
+    revive.add_argument("id", type=int)
+    revive.add_argument("--note", help="what changed (asked for if you don't pass it)")
+    revive.set_defaults(func=cmd_revive)
+
+    stats = commands.add_parser("stats", help="total dead ends, common tags, most haunted areas")
+    stats.set_defaults(func=cmd_stats)
     return parser
 
 

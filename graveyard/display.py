@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import textwrap
+from collections import Counter
 
 from .models import Entry
 
@@ -24,6 +25,28 @@ def _clean(text: str) -> str:
 
 def _line(text: str) -> str:
     return " ".join(_clean(text).split())
+
+
+def _top_five(title: str, counts: Counter) -> list[str]:
+    if not counts:
+        return []
+    top = counts.most_common(5)
+    width = max(len(name) for name, _ in top)
+    return ["", title, *(f"   {name.ljust(width)}  {'▇' * min(n, 30)} {n}" for name, n in top)]
+
+
+def format_stats(entries: list[Entry]) -> str:
+    revived = sum(e.status == "revived" for e in entries)
+    tags = Counter(_line(t).casefold() for e in entries for t in e.tags)
+    # Areas are free text, and one entry can name several: "deps · requirements.txt".
+    areas = Counter(_line(part) for e in entries for part in re.split(r"[,·]", e.area or "") if part.strip())
+    return "\n".join(
+        [
+            f"🪦 {len(entries) - revived} dead · 🌱 {revived} revived",
+            *_top_five("🏷  Most common tags", tags),
+            *_top_five("👻 Most haunted", areas),
+        ]
+    )
 
 
 def format_entry(entry: Entry, full: bool = False, color: bool = False) -> str:
