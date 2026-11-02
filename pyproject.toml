@@ -7,13 +7,14 @@ name = "graveyard"
 version = "0.0.1"
 description = "A per-repo log of failed approaches, so coding agents stop repeating them."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["mcp>=2,<3"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
 
 [project.scripts]
 graveyard = "graveyard.cli:main"
+graveyard-mcp = "graveyard.mcp_server:main"
 
 [tool.setuptools.packages.find]
 include = ["graveyard*"]
