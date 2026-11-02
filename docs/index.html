@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graveyard: a log of dead ends for coding agents</title>
+<meta name="description" content="Graveyard records what your coding agent already tried and why it failed, in a file in your repo, so the next session doesn't try it again.">
+<meta property="og:title" content="Graveyard: let failed fixes stay dead">
+<meta property="og:description" content="A log of what your coding agent already tried and why it failed, in a file in your repo.">
+<meta property="og:url" content="https://ryanjmahn.github.io/graveyard/">
+<meta name="theme-color" content="#0c0f0d">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 130'%3E%3Cpath fill='%23dfe6d6' d='M10 130V50a40 40 0 0 1 80 0v80z'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jacquard+12&family=Pixelify+Sans:wght@400..700&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --night: #0c0f0d;
+  --soil: #121612;
+  --panel: #181d18;
+  --line: #2c332c;
+  --ink: #f1f3ea;
+  --muted: #9ca597;
+  --stone: #3f4940;
+  --stone-lit: #dfe6d6;
+  --paper: #f0efe6;
+  --paper-line: #d3d3c5;
+  --paper-ink: #151813;
+  --paper-muted: #5e6358;
+  --moss: #b5d268;
+  --moss-deep: #47611a;
+  --failed: #ff8f7a;
+  --failed-deep: #b23a24;
+  --logo: "Jacquard 12", Georgia, serif;
+  --display: "Pixelify Sans", ui-monospace, Menlo, monospace;
+  --sans: "Hanken Grotesk", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --gutter: 16px;
+}
+@media (min-width: 720px) { :root { --gutter: 40px; } }
+* { box-sizing: border-box; }
+html { background: var(--night); scroll-behavior: smooth; scroll-padding-top: 76px; }
+body { margin: 0; color: var(--ink); background: var(--night); font: 400 17px/1.6 var(--sans); overflow-x: clip; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--moss); outline-offset: 3px; }
+.paper :focus-visible { outline-color: var(--paper-ink); }
+.wrap { width: 100%; max-width: 1240px; margin: 0 auto; padding: 0 var(--gutter); }
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 16px; top: 16px; background: var(--moss); color: var(--night); padding: 8px 12px; z-index: 10; }
+h1, h2, h3, p { margin: 0; }
+h1, h2 { font-family: var(--display); font-weight: 600; letter-spacing: -0.01em; }
+h1 { font-size: clamp(58px, min(6.4vw, 15vh), 96px); line-height: 1; }
+@media (min-width: 960px) { h1 em { display: block; } }
+h1 em, h2 em { font-style: normal; color: var(--moss); }
+h2 { font-size: clamp(38px, 5.4vw, 74px); line-height: 1.04; }
+h3 { font: 500 19px/1.3 var(--sans); letter-spacing: -0.01em; }
+code, pre { font-family: var(--mono); }
+code { font-size: 0.88em; }
+pre code { font-size: inherit; }
+button { font: inherit; cursor: pointer; }
+.label { font: 500 12px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+section { padding: clamp(72px, 10vw, 136px) 0; }
+
+/* Nav */
+.top { position: sticky; top: 0; z-index: 5; background: rgba(12, 15, 13, .88); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 60px; }
+.brand { display: inline-flex; align-items: center; gap: 9px; font: 400 34px/1 var(--logo); text-decoration: none; }
+.brand svg { width: 17px; height: 22px; fill: var(--stone-lit); }
+.top nav { display: flex; align-items: center; gap: 28px; font-size: 14px; }
+.top nav a { color: var(--muted); text-decoration: none; }
+.top nav a:hover { color: var(--ink); }
+.top nav a.source { color: var(--night); background: var(--ink); padding: 7px 13px; border-radius: 6px; font-weight: 500; }
+.top nav a.source:hover { background: var(--moss); }
+@media (max-width: 640px) { .top nav { gap: 16px; } .top nav a:not(.source):not(.keep) { display: none; } }
+
+/* Hero */
+.hero-copy { padding-top: clamp(20px, 4vh, 64px); padding-bottom: clamp(12px, 2vh, 40px); display: grid; gap: 24px; }
+.lede { max-width: 31em; color: var(--muted); font-size: clamp(17px, 1.6vw, 20px); line-height: 1.5; }
+@media (min-width: 960px) {
+  .hero-copy { grid-template-columns: minmax(0, 9fr) minmax(0, 4fr); align-items: end; gap: 56px; }
+  .hero-side { padding-bottom: 10px; }
+}
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.btn { padding: 11px 18px; border-radius: 8px; border: 1px solid var(--line); font-weight: 500; font-size: 15px; text-decoration: none; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--moss); border-color: var(--moss); color: var(--night); font-weight: 600; }
+.btn.primary:hover { background: #cbe582; border-color: #cbe582; }
+.fine { margin-top: 14px; color: var(--muted); font-size: 14px; }
+
+/* The yard: each stone is one entry, and search works on them for real */
+.yard { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: clamp(4px, 1vw, 14px); align-items: end; list-style: none; margin: 0; padding: 0; }
+.yard li { display: flex; align-items: flex-end; justify-content: center; height: clamp(96px, min(13vw, 19vh), 172px); }
+.stone { position: relative; display: block; width: 100%; max-height: 100%; padding: 0; border: 0; background: none; color: #eef1e8; transition: color .2s ease; }
+.stone svg { display: block; width: 100%; height: auto; fill: var(--stone); transition: fill .2s ease; }
+.stone .num { position: absolute; left: 0; right: 0; top: 42%; text-align: center; font: 700 clamp(13px, 1.25vw, 16px)/1 var(--mono); }
+.stone .word { position: absolute; left: 0; right: 0; top: 60%; text-align: center; font: 500 clamp(10px, .82vw, 12px)/1.15 var(--mono); padding: 0 8%; overflow-wrap: anywhere; }
+.stone .sprout { position: absolute; right: -6%; bottom: 0; width: 30%; height: auto; animation: grow .5s ease-out; transform-origin: bottom; fill: none; stroke: var(--moss); stroke-width: 9; stroke-linecap: round; }
+.stone:hover svg:first-child { fill: #5d695e; }
+.stone.lit { z-index: 3; color: var(--night); }
+.stone.lit svg:first-child { fill: var(--stone-lit); filter: drop-shadow(0 0 2px #0c0f0d) drop-shadow(0 0 14px rgba(223, 230, 214, .45)); }
+.stone.shake { animation: shake .4s steps(4); }
+@keyframes shake { 25% { translate: -3px 0; } 50% { translate: 3px 0; } 75% { translate: -2px 0; } }
+.yard.searching .stone:not(.lit) svg:first-child { fill: #2f362f; }
+.yard.searching .stone:not(.lit) { color: #c6ccbf; }
+.yard.searching .stone:not(.lit):hover svg:first-child { fill: #5d695e; }
+@media (max-width: 719px) {
+  .yard { grid-template-columns: repeat(6, minmax(0, 1fr)); row-gap: 14px; }
+  .yard li { height: 88px; border-bottom: 1px solid var(--line); }
+  .stone .word { display: none; }
+}
+
+/* The night: stars, fireflies and fog behind the words and in front of the stones */
+.night { position: relative; overflow: hidden; }
+#sky { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
+.moon { --size: clamp(240px, 30vw, 480px); position: absolute; z-index: 0; left: 50%; bottom: calc(var(--size) * -.42); width: var(--size); margin-left: calc(var(--size) / -2 - 2vw); filter: drop-shadow(0 0 70px rgba(214, 214, 160, .32)); }
+.tree { position: absolute; z-index: 0; bottom: 0; width: clamp(180px, 28vw, 420px); height: auto; fill: none; stroke: #232b24; stroke-linecap: round; }
+.tree.left { left: -5vw; }
+.tree.right { right: -6vw; transform: scaleX(-1); }
+.fence { position: absolute; z-index: 0; left: 0; right: 0; bottom: 0; height: 58px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='58' shape-rendering='crispEdges'%3E%3Cg fill='%2317201a'%3E%3Crect x='6' y='8' width='4' height='50'/%3E%3Crect x='4' y='4' width='8' height='4'/%3E%3Crect x='6' y='0' width='4' height='4'/%3E%3Crect x='24' y='16' width='3' height='42'/%3E%3Crect x='23' y='12' width='5' height='4'/%3E%3Crect y='22' width='36' height='3'/%3E%3Crect y='44' width='36' height='3'/%3E%3C/g%3E%3C/svg%3E") repeat-x bottom; }
+.lantern { display: none; position: absolute; z-index: 2; inset: 0; pointer-events: none; background: radial-gradient(circle 380px at var(--mx, 50%) var(--my, 88%), rgba(255, 244, 190, .10), transparent 50%, rgba(5, 7, 6, .3) 100%); }
+@media (hover: hover) and (pointer: fine) { .lantern { display: block; } }
+.hero-copy { position: relative; z-index: 3; }
+h1 .word { display: inline-block; white-space: nowrap; }
+h1 .ch { display: inline-block; animation: rise .55s steps(7) both; animation-delay: calc(var(--n) * 38ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(46%); } }
+.fog { position: absolute; z-index: 2; left: -20%; right: -20%; bottom: -24px; height: 90px; pointer-events: none; opacity: .5; background: radial-gradient(ellipse 30% 60% at 22% 70%, rgba(190, 205, 185, .2), transparent), radial-gradient(ellipse 34% 50% at 72% 80%, rgba(190, 205, 185, .16), transparent); animation: drift 26s ease-in-out infinite alternate; }
+.fog.back { bottom: 6px; opacity: .3; animation-duration: 41s; animation-direction: alternate-reverse; }
+@keyframes drift { from { transform: translateX(-7%); } to { transform: translateX(7%); } }
+
+/* Ghosts: pale says why it failed, green says why it came back */
+.yard-wrap { position: relative; padding-top: clamp(52px, 7vh, 96px); }
+.stone .ghost { position: absolute; left: 50%; bottom: calc(100% + 3px); width: clamp(20px, 36%, 38px); height: auto; margin-left: calc(clamp(20px, 36%, 38px) / -2); opacity: 0; transform: translateY(16px); transition: opacity .35s ease, transform .35s ease; pointer-events: none; }
+.stone.lit .ghost { opacity: .92; transform: none; animation: bob 2.6s ease-in-out infinite; }
+.stone:nth-of-type(n) .ghost { animation-delay: calc(var(--i) * -.37s); }
+@keyframes bob { 50% { translate: 0 -5px; } }
+.bubble { position: absolute; z-index: 4; left: 0; top: 0; width: min(300px, 78vw); padding: 10px 13px; color: var(--paper-ink); background: var(--stone-lit); border-radius: 8px; font: 500 14px/1.4 var(--sans); opacity: 0; transition: opacity .25s ease; pointer-events: none; }
+.bubble.on { opacity: 1; }
+.bubble.alive { background: var(--moss); }
+.bubble::after { content: ""; position: absolute; left: var(--tail, 50%); bottom: -6px; width: 12px; height: 12px; margin-left: -6px; background: inherit; transform: rotate(45deg); }
+.bubble b { font-weight: 700; }
+
+/* Under the ground: what the stones hold */
+.ground { background: var(--soil); border-top: 1px solid var(--line); padding: 24px 0 clamp(40px, 6vw, 72px); }
+.console { display: grid; gap: 22px; }
+@media (min-width: 960px) { .console { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 56px; align-items: start; } }
+.searchbox { display: block; }
+.searchbox span { display: block; margin-bottom: 8px; }
+.searchbox input { width: 100%; padding: 12px 14px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font: 400 16px var(--mono); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.chips button { padding: 6px 10px; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 6px; font: 400 13px var(--mono); }
+.chips button:hover { color: var(--ink); border-color: var(--muted); }
+.chips button[aria-pressed="true"] { color: var(--night); background: var(--stone-lit); border-color: var(--stone-lit); }
+.note { margin-top: 14px; color: var(--muted); font-size: 14px; }
+.status { margin-bottom: 8px; }
+.output { height: 340px; overflow-y: auto; margin: 0; padding: 18px 20px; background: var(--night); border: 1px solid var(--line); border-radius: 10px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.output .ln { display: block; padding-left: 3ch; text-indent: -3ch; }
+.output .entry { display: block; margin-bottom: 1.2em; }
+.output .prompt { display: block; margin-bottom: 1.2em; color: var(--muted); }
+.output .why { color: var(--failed); }
+.output .revived { color: var(--moss); }
+.output .dim { color: var(--muted); }
+
+.mini { display: inline-block; margin-top: 2px; padding: 6px 10px; color: var(--night); background: var(--moss); border: 0; border-radius: 6px; font: 500 13px var(--mono); }
+.mini:hover { background: #cbe582; }
+@keyframes grow { from { transform: scale(0); } }
+
+/* The story: the same pit, with and without a memory */
+.story { padding-bottom: clamp(56px, 7vw, 96px); }
+.story-head { display: grid; gap: 22px; margin-bottom: 28px; }
+@media (min-width: 960px) { .story-head { grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); align-items: end; gap: 56px; } }
+.tabs { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 9px; width: fit-content; }
+.tabs button { padding: 8px 14px; color: var(--muted); background: none; border: 0; border-radius: 6px; font-weight: 500; font-size: 14px; }
+.tabs button[aria-pressed="true"] { color: var(--night); background: var(--stone-lit); }
+.scene { display: block; width: 100%; height: auto; background: var(--soil); border: 1px solid var(--line); border-radius: 12px 12px 0 0; }
+.scene text { font-family: var(--mono); font-weight: 500; }
+.caption { display: grid; align-items: center; min-height: 84px; padding: 14px 18px; background: var(--panel); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 12px 12px; font-size: 15px; }
+.caption code { color: var(--moss); overflow-wrap: anywhere; }
+.caption .bad { color: var(--failed); }
+
+/* The agent's tools, as the stones they are */
+.tombs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; margin: 14px 0 0; padding: 0; list-style: none; border-bottom: 1px solid var(--muted); }
+@media (min-width: 900px) { .tombs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; } }
+.tombs li { padding: clamp(38px, 5vw, 62px) clamp(12px, 1.6vw, 22px) 24px; text-align: center; background: #262c26; border: 1px solid var(--line); border-bottom: 0; }
+.tombs li:nth-child(1) { border-radius: 140px 140px 0 0; }
+.tombs li:nth-child(2) { border-radius: 16px 16px 0 0; padding-top: clamp(30px, 3.6vw, 44px); }
+.tombs li:nth-child(3) { border-radius: 90px 90px 0 0 / 50px 50px 0 0; padding-top: clamp(30px, 3.6vw, 44px); }
+.tombs li:nth-child(4) { border-radius: 140px 140px 0 0; }
+.tombs { overflow: hidden; }
+.tombs li, .epitaph .slab { transition: transform .8s cubic-bezier(.2, .8, .25, 1); }
+.tombs li:nth-child(2) { transition-delay: .1s; } .tombs li:nth-child(3) { transition-delay: .2s; } .tombs li:nth-child(4) { transition-delay: .3s; }
+.buried li, .epitaph .slab.buried { transform: translateY(102%); }
+.tombs b { display: block; font: 600 clamp(12px, 1.1vw, 14px)/1.3 var(--mono); overflow-wrap: anywhere; }
+.tombs span { display: block; margin-top: 10px; color: #c9cfc2; font-size: 15px; line-height: 1.45; }
+.cli { margin-top: 56px; }
+.cli .rows { display: grid; column-gap: 56px; }
+@media (min-width: 960px) { .cli .rows { grid-template-columns: 1fr 1fr; } }
+
+/* The last stone on the page */
+.epitaph { padding: clamp(64px, 9vw, 110px) 0 0; text-align: center; overflow: hidden; }
+.epitaph .slab { width: min(440px, 100%); margin: 0 auto; padding: 70px 28px 44px; background: #262c26; border: 1px solid var(--line); border-bottom: 0; border-radius: 220px 220px 0 0; }
+.epitaph .here { font: 500 13px/1.3 var(--mono); letter-spacing: .24em; color: var(--muted); }
+.epitaph h2 { margin: 14px 0 8px; font-size: clamp(36px, 4.4vw, 50px); }
+.epitaph .dates { font: 400 13px var(--mono); color: var(--muted); }
+.epitaph .last { margin: 18px 0 24px; font-style: italic; font-size: 18px; line-height: 1.35; color: #c9cfc2; }
+
+/* The loop */
+.paper { background: var(--paper); color: var(--paper-ink); }
+.paper h2 em { color: var(--moss-deep); }
+.paper .label { color: var(--paper-muted); }
+.loop-head { display: grid; gap: 20px; margin-bottom: clamp(36px, 5vw, 64px); }
+.loop-head p:last-child { max-width: 32em; color: var(--paper-muted); }
+@media (min-width: 960px) { .loop-head { grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); align-items: end; gap: 56px; } }
+.sessions { display: grid; gap: 40px; }
+@media (min-width: 960px) { .sessions { grid-template-columns: 1fr 1fr; gap: 0; } .session + .session { border-left: 1px solid var(--paper-line); padding-left: 56px; } .session:first-child { padding-right: 56px; } }
+.session h3 { margin: 6px 0 18px; }
+.step { padding: 14px 0; border-top: 1px solid var(--paper-line); }
+.step p { font-size: 15px; }
+.step pre { margin: 0; font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.step .who { display: block; margin-bottom: 6px; }
+.paper .failed { color: var(--failed-deep); }
+
+/* Tools */
+.split { display: grid; gap: 44px; margin-top: clamp(36px, 5vw, 64px); }
+@media (min-width: 960px) { .split { grid-template-columns: 1fr 1fr; gap: 56px; } }
+.rows { margin: 16px 0 0; }
+.rows div { display: grid; gap: 2px 20px; padding: 13px 0; border-top: 1px solid var(--line); }
+.rows dt { font: 400 14px var(--mono); overflow-wrap: anywhere; }
+.rows dd { margin: 0; color: var(--muted); font-size: 15px; }
+
+/* The file */
+.file { background: var(--soil); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.file-grid { display: grid; gap: 40px; }
+@media (min-width: 960px) { .file-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: start; } }
+.file pre { margin: 0 0 28px; padding: 16px 18px; background: var(--night); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.file pre .add { color: var(--moss); }
+.facts { margin: 0; padding: 0; list-style: none; }
+.facts li { padding: 14px 0; border-top: 1px solid var(--line); font-size: 15px; color: var(--muted); }
+.facts b { color: var(--ink); font-weight: 500; }
+.limits { margin-top: 18px; color: var(--muted); font-size: 15px; }
+
+/* Install */
+.steps { margin: clamp(36px, 5vw, 64px) 0 0; padding: 0; list-style: none; counter-reset: step; }
+.steps > li { counter-increment: step; display: grid; gap: 14px; padding: 28px 0; border-top: 1px solid var(--paper-line); }
+.steps > li::before { content: counter(step); font: 700 44px/1 var(--mono); color: var(--paper-muted); }
+@media (min-width: 960px) { .steps > li { grid-template-columns: 80px minmax(0, 4fr) minmax(0, 7fr); gap: 32px; } }
+.cmds { display: grid; gap: 12px; min-width: 0; }
+.cmd-label { margin-bottom: 6px; }
+.steps details { font-size: 15px; color: var(--paper-muted); }
+.steps summary { cursor: pointer; }
+.steps details .cmd { margin-top: 10px; }
+.steps p { margin-top: 6px; color: var(--paper-muted); font-size: 15px; }
+.cmd { position: relative; min-width: 0; }
+.cmd pre { margin: 0; padding: 16px 18px; padding-right: 76px; background: var(--paper-ink); color: var(--ink); border-radius: 10px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.copy { position: absolute; top: 9px; right: 9px; min-width: 58px; padding: 6px 10px; border: 0; border-radius: 6px; background: var(--moss); color: var(--night); font-weight: 600; font-size: 13px; }
+.copy:hover { background: #cbe582; }
+
+/* Footer */
+footer { padding: 32px 0 40px; border-top: 1px solid var(--muted); color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 28px; }
+footer a:hover { color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .stone, .stone svg, .stone .ghost, .bubble { transition: none; animation: none !important; }
+  .fog, .stone .sprout { animation: none; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#main"><svg viewBox="0 0 100 130" aria-hidden="true"><path d="M10 130V50a40 40 0 0 1 80 0v80z"/></svg>Graveyard</a>
+    <nav aria-label="Main">
+      <a href="#story">How it works</a>
+      <a href="#tools">Tools</a>
+      <a class="keep" href="#install">Install</a>
+      <a class="source" href="https://github.com/ryanjmahn/graveyard">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="night" id="night">
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <svg class="moon" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="49" fill="#b9b98d"/><circle cx="33" cy="30" r="9" fill="#a7a77c"/><circle cx="61" cy="24" r="5" fill="#a7a77c"/><circle cx="70" cy="44" r="12" fill="#a7a77c"/><circle cx="40" cy="55" r="6" fill="#a7a77c"/></svg>
+  <svg class="tree left" id="treeL" viewBox="0 0 400 420" aria-hidden="true"></svg>
+  <svg class="tree right" id="treeR" viewBox="0 0 400 420" aria-hidden="true"></svg>
+  <div class="fence"></div>
+  <div class="wrap hero-copy">
+    <h1>Let failed fixes <em>stay dead.</em></h1>
+    <div class="hero-side">
+      <p class="lede">Graveyard records what your coding agent already tried and why it failed, in a file in your repo. The next session looks it up before trying the same thing again.</p>
+      <div class="actions">
+        <a class="btn primary" href="#install">Install</a>
+        <a class="btn" href="https://github.com/ryanjmahn/graveyard">View on GitHub</a>
+      </div>
+      <p class="fine">Connects to Claude Code over MCP. Free, MIT licensed, and runs on your machine.</p>
+    </div>
+  </div>
+
+  <div class="wrap yard-wrap" id="yardWrap">
+    <div class="bubble" id="bubble" aria-hidden="true"></div>
+    <ul class="yard" id="yard" aria-label="Example dead ends. Choose one to read it."></ul>
+  </div>
+  <div class="fog back"></div><div class="fog"></div>
+  <div class="lantern" id="lantern"></div>
+  </div>
+
+  <div class="ground">
+    <div class="wrap console">
+      <div>
+        <label class="searchbox" for="q">
+          <span class="label">Search this example graveyard</span>
+          <input id="q" type="search" value="torch" placeholder="What is your agent about to try?" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="chips" aria-label="Try a search">
+          <button type="button">torch</button>
+          <button type="button">numpy</button>
+          <button type="button">flaky test</button>
+          <button type="button">upgrade pandas</button>
+          <button type="button">ci</button>
+          <button type="button">auth</button>
+        </div>
+        <p class="note">These entries are made up, but the ranking and the output format match the real tool. Search to wake the ghosts, or choose a stone to read it in full and try reviving it.</p>
+      </div>
+      <div>
+        <p class="label status" id="status" role="status"></p>
+        <pre class="output" id="output" tabindex="0" aria-label="Search results"></pre>
+      </div>
+    </div>
+  </div>
+
+  <section class="story" id="story">
+    <div class="wrap">
+      <div class="story-head">
+        <div>
+          <p class="label">Why it exists</p>
+          <h2 style="margin-top:12px">Every new session <em>falls in the same pit.</em></h2>
+        </div>
+        <div>
+          <p style="color:var(--muted);margin-bottom:14px">Agents lose what they learned when their context gets compacted or a new session starts. So you pay for the same mistake again.</p>
+          <div class="tabs" role="group" aria-label="Choose a version of the story">
+            <button type="button" data-mode="without" aria-pressed="true">Without Graveyard</button>
+            <button type="button" data-mode="with" aria-pressed="false">With Graveyard</button>
+          </div>
+        </div>
+      </div>
+      <svg class="scene" id="scene" viewBox="0 0 800 250" role="img" aria-label="An illustration of an agent walking into the same pit each session, unless a tombstone warns it."></svg>
+      <p class="caption" id="caption" role="status"></p>
+    </div>
+  </section>
+
+  <section class="paper" id="loop">
+    <div class="wrap">
+      <div class="loop-head">
+        <div>
+          <p class="label">How it works</p>
+          <h2 style="margin-top:12px">Your agent forgets. <em>Your repo doesn't.</em></h2>
+        </div>
+        <p>Here's what that looks like in real tool calls, as an illustration. Nothing carries over between these two sessions except one line in a file.</p>
+      </div>
+      <div class="sessions">
+        <div class="session">
+          <p class="label">Monday</p>
+          <h3>The fix fails, and it gets written down</h3>
+          <div class="step"><span class="label who">Agent runs</span><pre>pip install "numpy>=2"
+pytest</pre></div>
+          <div class="step"><span class="label who">Output</span><pre class="failed">ImportError: numpy.core.multiarray failed to import</pre></div>
+          <div class="step"><span class="label who">Agent calls</span><pre>record_dead_end(
+  attempt="Bumped numpy to 2.x to fix the dtype warning",
+  why_failed="broke torch 2.1 (ABI mismatch on import)",
+  area="deps · requirements.txt",
+  tags=["numpy", "torch", "dependencies"])</pre></div>
+          <div class="step"><span class="label who">Graveyard replies</span><pre>Recorded dead end #12.</pre></div>
+        </div>
+        <div class="session">
+          <p class="label">Thursday, new session</p>
+          <h3>The same warning, and a different choice</h3>
+          <div class="step"><span class="label who">Agent calls</span><pre>search_dead_ends(query="numpy dtype warning")</pre></div>
+          <div class="step"><span class="label who">Graveyard replies</span><pre>🪦 #12  Bumped numpy to 2.x to fix the dtype warning
+   <span class="failed">✗ Why it failed: broke torch 2.1 (ABI mismatch on import)</span>
+   📁 Area: deps · requirements.txt
+   🏷  tags: numpy, torch, dependencies
+   🕐 2026-11-01 · by claude-code</pre></div>
+          <div class="step"><span class="label who">Agent says</span><p>Bumping numpy already broke torch here, so I'll leave the version alone and fix the warning with an explicit dtype.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tools">
+    <div class="wrap">
+      <p class="label">Two ways in</p>
+      <h2 style="margin-top:12px">The agent gets four tools. <em>You get a CLI.</em></h2>
+      <ul class="tombs" style="margin-top:clamp(36px,5vw,64px)">
+        <li><b>search_dead_ends</b><span>Finds matching entries, best first. Its description tells the agent to call it before attempting a fix.</span></li>
+        <li><b>record_dead_end</b><span>Saves what was tried and why it failed, with the client's name as the author.</span></li>
+        <li><b>list_dead_ends</b><span>Shows recent entries, newest first.</span></li>
+        <li><b>revive_dead_end</b><span>Marks an entry as having worked under different conditions.</span></li>
+      </ul>
+      <div class="cli">
+        <h3>And for you, in the terminal</h3>
+        <dl class="rows">
+          <div><dt>graveyard init</dt><dd>Sets up the folder and prints the <code>CLAUDE.md</code> snippet.</dd></div>
+          <div><dt>graveyard list</dt><dd>Shows recent entries, filtered by tag or area.</dd></div>
+          <div><dt>graveyard add</dt><dd>Asks for each field, or takes flags.</dd></div>
+          <div><dt>graveyard show &lt;id&gt;</dt><dd>Shows one entry in full.</dd></div>
+          <div><dt>graveyard search &lt;query&gt;</dt><dd>Searches by keyword.</dd></div>
+          <div><dt>graveyard revive &lt;id&gt;</dt><dd>Marks an entry as revived, keeping earlier notes.</dd></div>
+          <div><dt>graveyard stats</dt><dd>Shows totals, common tags, and the most haunted areas.</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <section class="file">
+    <div class="wrap file-grid">
+      <div>
+        <p class="label">Where it lives</p>
+        <h2 style="margin-top:12px">Just a file, <em>in your repo.</em></h2>
+      </div>
+      <div>
+        <pre><span class="dim">.graveyard/entries.jsonl</span>
+<span class="add">+{"id": 12, "attempt": "Bumped numpy to 2.x to fix the dtype warning", "why_failed": "broke torch 2.1 (ABI mismatch on import)", "created_at": "2026-11-01T13:28:31+00:00", "status": "dead", "area": "deps · requirements.txt", "tags": ["numpy", "torch", "dependencies"], "author": "claude-code"}</span></pre>
+        <ul class="facts">
+          <li><b>No accounts or servers.</b> It runs on your machine, and the entries are plain text you can read.</li>
+          <li><b>Shared through git.</b> Commit the folder and your teammates' agents get it too, or use <code>--private</code> to keep it to yourself.</li>
+          <li><b>Hard to lose.</b> New entries are only appended. A revive changes one line through a temp file and a rename, and a line it can't read is skipped, never deleted.</li>
+        </ul>
+        <p class="limits">It has limits: search matches keywords rather than meaning, and it has only been run on macOS. <a href="https://github.com/ryanjmahn/graveyard#known-limits">Read the known limits</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="paper" id="install">
+    <div class="wrap">
+      <p class="label">Install</p>
+      <h2 style="margin-top:12px">Dig in, <em>in three steps.</em></h2>
+      <ol class="steps">
+        <li>
+          <div><h3>Install it</h3><p>You'll need Python 3.10 or newer. Install once, then run <code>graveyard init</code> in each repo you want a graveyard for.</p></div>
+          <div class="cmds">
+            <div class="cmd"><pre><code>git clone https://github.com/ryanjmahn/graveyard.git
+cd graveyard
+python3 -m venv .venv
+.venv/bin/pip install -e .
+source .venv/bin/activate</code></pre><button class="copy" type="button">Copy</button></div>
+            <div class="cmd"><pre><code>cd /path/to/your/repo
+graveyard init</code></pre><button class="copy" type="button">Copy</button></div>
+          </div>
+        </li>
+        <li>
+          <div><h3>Connect it to Claude Code</h3><p>Run this from the folder you cloned. Register it once and each repo keeps its own graveyard. Start a new session to pick up the tools.</p></div>
+          <div class="cmds">
+            <div class="cmd"><pre><code>claude mcp add --scope user graveyard -- "$(pwd)/.venv/bin/graveyard-mcp"
+claude mcp list</code></pre><button class="copy" type="button">Copy</button></div>
+            <details>
+              <summary>Only use the VS Code extension, with no <code>claude</code> command?</summary>
+              <div class="cmd"><pre><code>C=$(ls -d ~/.vscode/extensions/anthropic.claude-code-*/ | sort -V | tail -1)resources/native-binary/claude
+"$C" mcp add --scope user graveyard -- "$(pwd)/.venv/bin/graveyard-mcp"
+"$C" mcp list</code></pre><button class="copy" type="button">Copy</button></div>
+            </details>
+          </div>
+        </li>
+        <li>
+          <div><h3>Tell your agent to use it</h3><p>Paste this into your repo's <code>CLAUDE.md</code>. Without it, the agent has to think of the graveyard on its own.</p></div>
+          <div class="cmd"><pre><code>## Graveyard (failed approaches)
+- Before trying a fix or changing an area of the code, call `search_dead_ends` with relevant keywords.
+- If an approach fails and you're switching to a different one, call `record_dead_end` with what you tried and why it failed.
+- Don't retry anything listed as dead unless conditions have clearly changed. If you do, say why.
+</code></pre><button class="copy" type="button">Copy</button></div>
+        </li>
+      </ol>
+    </div>
+  </section>
+  <section class="epitaph" aria-label="Closing">
+    <div class="wrap">
+      <div class="slab">
+        <p class="here">HERE LIES</p>
+        <h2>your last failed fix</h2>
+        <p class="dates">Tuesday – Tuesday</p>
+        <p class="last">It seemed like a good idea at the time.</p>
+        <a class="btn primary" href="#install">Bury yours</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Made by <a href="https://github.com/ryanjmahn">Ryan Ahn</a>. MIT licensed.</span>
+    <span><a href="https://github.com/ryanjmahn/graveyard">Source</a> &nbsp;·&nbsp; <a href="https://github.com/ryanjmahn/squeeze">Squeeze, the log squeezer</a></span>
+  </div>
+</footer>
+
+<script>
+// shortcut: copies the ranking from graveyard/search.py so the demo needs no backend; tests/test_docs.py checks they agree.
+const ENTRIES = [
+  { id: 12, word: "numpy 2.x", attempt: "Bumped numpy to 2.x to fix the dtype warning", why_failed: "broke torch 2.1 (ABI mismatch on import)", area: "deps · requirements.txt", tags: ["numpy", "torch", "dependencies"], author: "claude-code", created_at: "2026-11-01", error_snippet: "ImportError: numpy.core.multiarray failed to import" },
+  { id: 11, word: "alpine", attempt: "Switched the Docker base image to alpine", why_failed: "no prebuilt wheels for musl, so the build ran 20 minutes and then failed", area: "Dockerfile", tags: ["docker", "build"], author: "cursor", created_at: "2026-10-29" },
+  { id: 10, word: "login test", attempt: "Retried the flaky login test with a longer timeout", why_failed: "still fails: the session cookie is set after the redirect, so timing isn't the cause", area: "tests/test_auth.py", tags: ["flaky", "auth", "tests"], author: "claude-code", created_at: "2026-10-27" },
+  { id: 9, word: "torch 2.3", attempt: "Pinned torch to 2.3", why_failed: "CUDA build unavailable", area: "requirements.txt", tags: ["torch", "dependencies"], author: "ryan", created_at: "2026-10-24", status: "revived", note: "works since the CUDA 12 builds shipped" },
+  { id: 8, word: "user cache", attempt: "Cached the user lookup in a module global", why_failed: "went stale across workers after profile edits", area: "src/users/cache.py", tags: ["cache", "users"], author: "claude-code", created_at: "2026-10-21" },
+  { id: 7, word: "migrate", attempt: "Ran the migration inside the request handler", why_failed: "deadlocked with the background worker", area: "db/migrations", tags: ["database", "migrations"], author: "codex", created_at: "2026-10-18" },
+  { id: 6, word: "mock pay", attempt: "Mocked the payment client in integration tests", why_failed: "tests passed, but the webhook signature check still failed in staging", area: "tests/test_checkout.py", tags: ["tests", "payments"], author: "claude-code", created_at: "2026-10-15" },
+  { id: 5, word: "eslint", attempt: "Lowered the ESLint rule to a warning", why_failed: "CI runs with --max-warnings 0, so the build still failed", area: ".eslintrc", tags: ["ci", "lint"], author: "cursor", created_at: "2026-10-12" },
+  { id: 4, word: "httpx", attempt: "Replaced requests with httpx to get retries", why_failed: "redirect defaults differ, which broke the OAuth callback", area: "src/auth/oauth.py", tags: ["auth", "http"], author: "claude-code", created_at: "2026-10-09" },
+  { id: 3, word: "try / except", attempt: "Wrapped the parse step in a try/except", why_failed: "hid the real encoding error and dropped rows silently", area: "src/ingest/csv.py", tags: ["csv", "encoding"], author: "codex", created_at: "2026-10-06" },
+  { id: 2, word: "pandas", attempt: "Upgraded pandas", why_failed: "broke the CSV parser: a read_csv option it relied on was removed", area: "src/ingest", tags: ["pandas", "csv"], author: "ryan", created_at: "2026-10-03" },
+  { id: 1, word: "shallow", attempt: "Set fetch-depth to 1 to speed up CI", why_failed: "the changelog step needs tags and full history", area: ".github/workflows", tags: ["ci", "git"], author: "claude-code", created_at: "2026-09-30" },
+];
+
+const STOPWORDS = new Set("a an and are as at be but by for from if in into is it not of on or that the this to was with".split(" "));
+const WEIGHTS = { tags: 8, area: 6, attempt: 3, why_failed: 2, error_snippet: 1 };
+const words = (text) => text.toLowerCase().match(/[\p{L}\p{N}_]+/gu) || [];
+
+function terms(query) {
+  const all = words(query);
+  const kept = all.filter((w) => !STOPWORDS.has(w));
+  return [...new Set(kept.length ? kept : all)];
+}
+
+function termScore(term, entry) {
+  let best = 0;
+  for (const [name, weight] of Object.entries(WEIGHTS)) {
+    const text = (name === "tags" ? entry.tags.join(" ") : entry[name] || "").toLowerCase();
+    if (words(text).includes(term)) best = Math.max(best, weight);
+    else if (term.length >= 3 && text.includes(term)) best = Math.max(best, weight / 2);
+  }
+  return best;
+}
+
+function searchEntries(query) {
+  const scored = [];
+  for (const entry of ENTRIES) {
+    const scores = terms(query).map((t) => termScore(t, entry)).filter(Boolean);
+    if (scores.length) scored.push({ entry, matched: scores.length, total: scores.reduce((a, b) => a + b, 0) });
+  }
+  // ENTRIES is newest first and sort is stable, so ties stay newest first, as in search.py.
+  return scored.sort((a, b) => b.matched - a.matched || b.total - a.total).map((s) => s.entry);
+}
+
+// Pixel sprites: X is the body, O is the dark part.
+const GHOST = ["...XXXXX...", "..XXXXXXX..", ".XXXXXXXXX.", ".XXOOXXOOX.", ".XXOOXXOOX.", "XXXXXXXXXXX", "XXXXXOOXXXX", "XXXXXXXXXXX", "XXXXXXXXXXX", "XXXXXXXXXXX", "XX.XXX.XXX.", "X...X...X.."];
+const AGENT = ["....XX....", "....XX....", ".XXXXXXXX.", ".XOOXXOOX.", ".XOOXXOOX.", ".XXXXXXXX.", "..XXXXXX..", "XXXXXXXXXX", "X.XXXXXX.X", "..XXXXXX.."];
+const BAT = [["X.........X", "XX..X.X..XX", "XXXXXXXXXXX", "..XXXXXXX..", "....XXX...."], ["...........", "....X.X....", ".XXXXXXXXX.", "XXX.XXX.XXX", "X...XXX...X"]];
+const LEGS = [["..XX..XX..", "..XX..XX.."], ["...XX.XX..", "...XX..XX."]];
+function pixels(rows, body, size = 1) {
+  return rows.map((row, y) => [...row].map((c, x) => c === "." ? "" :
+    `<rect x="${x * size}" y="${y * size}" width="${size}" height="${size}" fill="${c === "X" ? body : "#151813"}"/>`).join("")).join("");
+}
+const PALE = "#dfe6d6", MOSS = "#b5d268", GLOW = "#f2e9a0";
+const ghostSvg = (color) => `<svg class="ghost" viewBox="0 0 11 12" shape-rendering="crispEdges" aria-hidden="true">${pixels(GHOST, color)}</svg>`;
+const SPROUT = `<svg class="sprout" viewBox="0 0 60 60" aria-hidden="true"><path d="M30 56V26M30 34C30 18 18 12 6 12c0 14 10 22 24 22M30 26c0-12 10-20 24-20 0 14-10 20-24 20"/></svg>`;
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const SHAPES = [
+  "M10 130V50a40 40 0 0 1 80 0v80z",
+  "M8 130V38l14-14h10L50 8l18 16h10l14 14v92z",
+  "M14 130V22q0-10 10-10h52q10 0 10 10v108z",
+  "M12 130V62Q12 30 50 6Q88 30 88 62v68z",
+];
+const WIDTHS = [100, 88, 96, 80, 100, 90, 84, 100, 86, 94, 100, 82];
+
+const yard = document.getElementById("yard");
+const output = document.getElementById("output");
+const status = document.getElementById("status");
+const chips = document.querySelectorAll(".chips button");
+const input = document.getElementById("q");
+const stones = new Map();
+
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+ENTRIES.slice().reverse().forEach((entry, i) => {
+  const li = document.createElement("li");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "stone";
+  button.style.width = WIDTHS[i] + "%";
+  button.style.setProperty("--i", i);
+  button.setAttribute("aria-label", `Dead end #${entry.id}: ${entry.attempt}`);
+  button.innerHTML = `<svg viewBox="0 0 100 130" aria-hidden="true"><path d="${SHAPES[i % SHAPES.length]}"/></svg>` +
+    `<span class="num" aria-hidden="true">#${entry.id}</span><span class="word" aria-hidden="true">${esc(entry.word)}</span>` +
+    ghostSvg(entry.status === "revived" ? MOSS : PALE) + (entry.status === "revived" ? SPROUT : "");
+  button.addEventListener("mouseenter", () => { if (button.classList.contains("lit")) speak(entry); });
+  button.addEventListener("click", () => {
+    input.value = "";  // the box would otherwise claim a search that this isn't
+    syncChips();
+    light([entry]);
+    showEntry(entry);
+  });
+  li.append(button);
+  yard.append(li);
+  stones.set(entry.id, button);
+});
+
+function format(entry, full) {
+  const revived = entry.status === "revived";
+  const title = `${revived ? "🌱" : "🪦"} #${entry.id}  ${esc(entry.attempt)}${revived ? "  (revived)" : ""}`;
+  const lines = [
+    revived ? `<span class="revived">${title}</span>` : title,
+    `<span class="why">   ✗ Why it failed: ${esc(entry.why_failed)}</span>`,
+    `   📁 Area: ${esc(entry.area)}`,
+    `   🏷  tags: ${esc(entry.tags.join(", "))}`,
+  ];
+  if (entry.note) lines.push(`   📝 Note: ${esc(entry.note)}`);
+  if (full && entry.error_snippet) lines.push("   ⚠️  Error:", `<span class="dim">      ${esc(entry.error_snippet)}</span>`);
+  lines.push(`<span class="dim">   🕐 ${entry.created_at} · by ${esc(entry.author)}</span>`);
+  return `<span class="entry">${lines.map((line) => `<span class="ln">${line}</span>`).join("")}</span>`;
+}
+
+function showEntry(entry) {
+  status.textContent = entry.status === "revived" ? `Revived #${entry.id}` : `Dead end #${entry.id}`;
+  const revive = entry.status === "revived" ? "" : `<button class="mini" type="button" id="revive">Try it: graveyard revive ${entry.id}</button>`;
+  show(`graveyard show ${entry.id}`, format(entry, true) + revive);
+  const button = document.getElementById("revive");
+  if (button) button.addEventListener("click", () => {
+    entry.status = "revived";
+    entry.note = "it worked after all, in this demo";
+    const stone = stones.get(entry.id);
+    stone.querySelector(".ghost").outerHTML = ghostSvg(MOSS);
+    stone.insertAdjacentHTML("beforeend", SPROUT);
+    sparks(stone);
+    showEntry(entry);
+    speak(entry);
+    document.getElementById("output").focus();
+  });
+}
+
+// One ghost talks at a time, and they take turns.
+const bubble = document.getElementById("bubble");
+const yardWrap = document.getElementById("yardWrap");
+let speaking = [], turn = 0, turnTimer = null, speaker = null;
+
+function speak(entry) {
+  speaker = entry;
+  const alive = entry.status === "revived";
+  bubble.innerHTML = `<b>#${entry.id}</b> ${esc(alive ? entry.note : entry.why_failed)}`;
+  bubble.classList.toggle("alive", alive);
+  bubble.classList.add("on");
+  const area = yardWrap.getBoundingClientRect();
+  const ghost = stones.get(entry.id).querySelector(".ghost").getBoundingClientRect();
+  const center = ghost.left + ghost.width / 2 - area.left;
+  const left = Math.max(8, Math.min(center - bubble.offsetWidth / 2, area.width - bubble.offsetWidth - 8));
+  bubble.style.setProperty("--tail", `${center - left}px`);
+  bubble.style.transform = `translate(${left}px, ${stones.get(entry.id).getBoundingClientRect().top - area.top - ghost.height - bubble.offsetHeight - 12}px)`;
+}
+
+function startTurns(entries) {
+  clearInterval(turnTimer);
+  speaking = entries;
+  turn = 0;
+  if (!entries.length) {
+    speaker = null;
+    bubble.classList.remove("on");
+    return;
+  }
+  speak(entries[0]);
+  if (entries.length > 1 && !REDUCED) turnTimer = setInterval(() => speak(speaking[++turn % speaking.length]), 3200);
+}
+addEventListener("resize", () => { if (speaker) speak(speaker); });
+if (document.fonts) document.fonts.ready.then(() => { if (speaker) speak(speaker); });
+
+function light(entries) {
+  startTurns(entries);
+  yard.classList.toggle("searching", true);
+  const ids = new Set(entries.map((e) => e.id));
+  stones.forEach((button, id) => button.classList.toggle("lit", ids.has(id)));
+}
+
+function show(command, body) {
+  output.innerHTML = `<span class="prompt">$ ${esc(command)}</span>${body}`;
+  output.scrollTop = 0;
+}
+
+function syncChips() {
+  chips.forEach((chip) => chip.setAttribute("aria-pressed", String(chip.textContent === input.value.trim())));
+}
+
+function runSearch() {
+  const query = input.value.trim();
+  syncChips();
+  if (!query) {
+    yard.classList.remove("searching");
+    stones.forEach((button) => button.classList.remove("lit"));
+    startTurns([]);
+    status.textContent = "12 entries";
+    show("graveyard search", "Type what your agent is about to try, or choose a stone.");
+    return;
+  }
+  const found = searchEntries(query);
+  light(found);
+  status.textContent = found.length === 1 ? "1 match" : `${found.length} matches`;
+  show(`graveyard search ${query}`, found.length ? found.map((e) => format(e)).join("") : `🌱 Nothing buried for "${esc(query)}".`);
+}
+
+input.addEventListener("input", runSearch);
+chips.forEach((chip) => chip.addEventListener("click", () => {
+  input.value = chip.textContent;
+  runSearch();
+}));
+runSearch();
+
+// The headline climbs out of the ground, letter by letter.
+(function riseLetters() {
+  const h1 = document.querySelector("h1");
+  if (REDUCED) return;
+  h1.setAttribute("aria-label", h1.textContent);
+  let n = 0;
+  const split = (text) => text.split(" ").filter(Boolean).map((word) =>
+    `<span class="word" aria-hidden="true">${[...word].map((c) => `<span class="ch" style="--n:${n++}">${esc(c)}</span>`).join("")}</span>`).join(" ");
+  h1.innerHTML = [...h1.childNodes].map((node) => node.nodeType === 3 ? split(node.textContent) : `<em>${split(node.textContent)}</em>`).join(" ");
+})();
+
+// Dead trees: branching is the one thing here that's better computed than drawn.
+function growTree(svg, seed) {
+  let state = seed;
+  const random = () => (state = (state * 16807) % 2147483647) / 2147483647;
+  const paths = [];
+  (function branch(x, y, angle, length, width) {
+    if (length < 9) return;
+    const x2 = x + Math.cos(angle) * length, y2 = y + Math.sin(angle) * length;
+    paths.push(`<path d="M${x.toFixed(1)} ${y.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}" stroke-width="${width.toFixed(1)}"/>`);
+    const forks = random() < 0.25 ? 3 : 2;
+    for (let i = 0; i < forks; i++) branch(x2, y2, angle + (random() - 0.5) * 1.25, length * (0.62 + random() * 0.2), width * 0.68);
+  })(170, 420, -1.42, 96, 15);
+  svg.innerHTML = paths.join("");
+}
+growTree(document.getElementById("treeL"), 41);
+growTree(document.getElementById("treeR"), 2027);
+
+function sparks(stone) {
+  stone.classList.remove("shake");
+  void stone.offsetWidth;
+  stone.classList.add("shake");
+  if (REDUCED) return;
+  for (let i = 0; i < 18; i++) {
+    const spark = document.createElement("span");
+    spark.style.cssText = `position:absolute;left:50%;top:50%;width:4px;height:4px;background:${i % 3 ? MOSS : GLOW};pointer-events:none`;
+    stone.append(spark);
+    const angle = Math.random() * 6.28, far = 40 + Math.random() * 70;
+    spark.animate([{ transform: "none", opacity: 1 }, { transform: `translate(${Math.cos(angle) * far}px, ${Math.sin(angle) * far - 40}px)`, opacity: 0 }], { duration: 650 + Math.random() * 350, easing: "cubic-bezier(.2,.7,.3,1)" }).onfinish = () => spark.remove();
+  }
+}
+
+(function lantern() {
+  const night = document.getElementById("night");
+  const light = document.getElementById("lantern");
+  night.addEventListener("pointermove", (event) => {
+    const box = night.getBoundingClientRect();
+    light.style.setProperty("--mx", `${event.clientX - box.left}px`);
+    light.style.setProperty("--my", `${event.clientY - box.top}px`);
+  });
+})();
+
+// The sky. Fireflies wander until a search gives them somewhere to go.
+(function sky() {
+  const canvas = document.getElementById("sky");
+  const night = document.getElementById("night");
+  const ctx = canvas.getContext("2d");
+  let width = 0, height = 0, stars = [];
+  function resize() {
+    const ratio = Math.min(devicePixelRatio || 1, 2);
+    width = night.clientWidth;
+    height = night.clientHeight;
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    stars = Array.from({ length: Math.round(width / 16) }, () => ({ x: Math.random() * width, y: Math.random() * height * 0.62, size: Math.random() < 0.2 ? 2 : 1, phase: Math.random() * 6.3 }));
+  }
+  resize();
+  addEventListener("resize", resize);
+  const flies = Array.from({ length: width < 720 ? 9 : 20 }, (_, i) => ({ x: Math.random() * width, y: height * (0.55 + Math.random() * 0.45), vx: 0, vy: 0, phase: i * 1.7, stone: i }));
+  function targets() {
+    const box = night.getBoundingClientRect();
+    return [...document.querySelectorAll(".stone.lit")].map((stone) => {
+      const r = stone.getBoundingClientRect();
+      return { x: r.left - box.left + r.width / 2, y: r.top - box.top + r.height * 0.4, w: r.width * 0.75, h: r.height * 0.7 };
+    });
+  }
+  function draw(time) {
+    ctx.clearRect(0, 0, width, height);
+    for (const star of stars) {
+      ctx.fillStyle = `rgba(239, 240, 220, ${REDUCED ? 0.5 : 0.3 + 0.3 * Math.sin(time / 1400 + star.phase)})`;
+      ctx.fillRect(star.x, star.y, star.size, star.size);
+    }
+    if (REDUCED) return;
+    const goals = targets();
+    for (const fly of flies) {
+      const goal = goals.length ? goals[fly.stone % goals.length] : null;
+      const tx = goal ? goal.x + Math.sin(time / 500 + fly.phase) * goal.w : fly.x + Math.sin(time / 900 + fly.phase) * 40;
+      const ty = goal ? goal.y + Math.cos(time / 640 + fly.phase) * goal.h : height * 0.72 + Math.sin(time / 1300 + fly.phase) * height * 0.24;
+      fly.vx = (fly.vx + (tx - fly.x) * (goal ? 0.0035 : 0.0006)) * 0.95;
+      fly.vy = (fly.vy + (ty - fly.y) * (goal ? 0.0035 : 0.0006)) * 0.95;
+      fly.x = (fly.x + fly.vx + width) % width;
+      fly.y += fly.vy;
+      const glow = 0.45 + 0.55 * Math.abs(Math.sin(time / 700 + fly.phase));
+      const halo = ctx.createRadialGradient(fly.x, fly.y, 0, fly.x, fly.y, 11);
+      halo.addColorStop(0, `rgba(242, 233, 160, ${glow * 0.55})`);
+      halo.addColorStop(1, "rgba(242, 233, 160, 0)");
+      ctx.fillStyle = halo;
+      ctx.fillRect(fly.x - 11, fly.y - 11, 22, 22);
+      ctx.fillStyle = `rgba(255, 250, 205, ${glow})`;
+      ctx.fillRect(fly.x, fly.y, 2, 2);
+    }
+    // A bat crosses every so often, flapping on two frames.
+    const cycle = (time % 11000) / 7000;
+    if (cycle < 1) {
+      const frame = BAT[Math.floor(time / 130) % 2];
+      const bx = cycle * (width + 120) - 60, by = height * 0.3 + Math.sin(cycle * 11) * 34;
+      ctx.fillStyle = "#6c7568";
+      frame.forEach((row, y) => [...row].forEach((c, x) => { if (c === "X") ctx.fillRect(bx + x * 3, by + y * 3, 3, 3); }));
+    }
+    if (visible) requestAnimationFrame(draw);
+  }
+  let visible = true;
+  new IntersectionObserver(([entry]) => {
+    const was = visible;
+    visible = entry.isIntersecting;
+    if (visible && !was) requestAnimationFrame(draw);
+  }).observe(night);
+  requestAnimationFrame(draw);
+})();
+
+if (!REDUCED) document.querySelectorAll(".tombs, .epitaph .slab").forEach((group) => {
+  group.classList.add("buried");
+  new IntersectionObserver(([entry], observer) => {
+    if (entry.isIntersecting) { group.classList.remove("buried"); observer.disconnect(); }
+  }, { threshold: 0.05 }).observe(group.closest(".wrap"));
+});
+
+// The story, played as a little timeline.
+(function story() {
+  const scene = document.getElementById("scene");
+  const caption = document.getElementById("caption");
+  const tabs = document.querySelectorAll(".tabs button");
+  const GROUND = 190, PIT = [470, 590], STONE_X = 375;
+  scene.innerHTML = `
+    ${Array.from({ length: 46 }, (_, i) => `<rect x="${(i * 173) % 800}" y="${(i * 67) % 150}" width="${i % 5 ? 1 : 2}" height="${i % 5 ? 1 : 2}" fill="#eff0dc" opacity="${0.25 + (i % 4) * 0.15}"/>`).join("")}
+    <path d="M0 190V150q110-50 220-14t210-8 200 6 170-14V190z" fill="#171c18"/>
+    <text x="24" y="34" font-size="13" fill="#9ca597" id="sessionText"></text>
+    <text x="776" y="34" font-size="13" fill="#ff8f7a" text-anchor="end" id="tally"></text>
+    <circle cx="660" cy="66" r="26" fill="#b9b98d"/><circle cx="651" cy="58" r="5" fill="#a7a77c"/><circle cx="668" cy="74" r="7" fill="#a7a77c"/>
+    <rect x="0" y="${GROUND}" width="${PIT[0]}" height="60" fill="#262c26"/>
+    <rect x="${PIT[1]}" y="${GROUND}" width="${800 - PIT[1]}" height="60" fill="#262c26"/>
+    <rect x="${PIT[0]}" y="${GROUND}" width="${PIT[1] - PIT[0]}" height="60" fill="#0a0c0a"/>
+    <g transform="translate(${PIT[0] - 30} ${GROUND})"><rect x="-2" y="-34" width="4" height="34" fill="#6c7568"/><rect x="-37" y="-52" width="74" height="20" fill="#6c7568"/><text x="0" y="-38" font-size="12" fill="#0c0f0d" text-anchor="middle">numpy 2.x</text></g>
+    <g id="pile"></g>
+    <g id="plank" opacity="0"><rect x="${PIT[0] - 8}" y="${GROUND - 3}" width="${PIT[1] - PIT[0] + 16}" height="8" fill="#b5d268"/><text x="${(PIT[0] + PIT[1]) / 2}" y="${GROUND - 12}" font-size="13" fill="#b5d268" text-anchor="middle">explicit dtype</text></g>
+    <g id="flag" opacity="0" transform="translate(720 ${GROUND})"><rect x="0" y="-58" width="4" height="58" fill="#dfe6d6"/><path d="M4 -58h34l-9 11 9 11H4z" fill="#b5d268"/><text x="16" y="14" font-size="12" fill="#b5d268" text-anchor="middle">fixed</text></g>
+    <g id="tomb" opacity="0" transform="translate(${STONE_X} ${GROUND})"><path d="M-17 0V-30a17 17 0 0 1 34 0V0z" fill="#dfe6d6"/><text x="0" y="-18" font-size="10" fill="#151813" text-anchor="middle">#12</text></g>
+    <g id="sceneGhost" opacity="0" transform="translate(${STONE_X - 11} ${GROUND - 76})">${pixels(GHOST, PALE, 2)}</g>
+    <g id="say" opacity="0" transform="translate(${STONE_X - 92} ${GROUND - 118})"><rect width="184" height="30" rx="6" fill="#dfe6d6"/><path d="M84 30l8 8 8-8z" fill="#dfe6d6"/><text x="92" y="20" font-size="13" fill="#151813" text-anchor="middle">broke torch 2.1</text></g>
+    <g id="agent"></g>`;
+  const $ = (id) => scene.querySelector("#" + id);
+  const agent = $("agent");
+  let state = { x: 24, y: GROUND - 36, frame: 0 };
+  function placeAgent(alpha = 1) {
+    agent.innerHTML = `<g shape-rendering="crispEdges">${pixels([...AGENT, ...LEGS[state.frame % 2]], GLOW, 3)}</g>`;
+    agent.setAttribute("transform", `translate(${state.x} ${state.y})`);
+    agent.setAttribute("opacity", alpha);
+  }
+  let run = 0;
+  const alive = (id) => { if (id !== run) throw new Error("replaced"); };
+  const wait = (ms, id) => new Promise((done) => setTimeout(done, ms)).then(() => alive(id));
+  function tween(ms, id, step) {
+    return new Promise((done, fail) => {
+      const start = performance.now();
+      (function tick(now) {
+        if (id !== run) return fail(new Error("replaced"));
+        const t = Math.min((now - start) / ms, 1);
+        step(t);
+        t < 1 ? requestAnimationFrame(tick) : done();
+      })(start);
+    });
+  }
+  function walk(to, id) {
+    const from = state.x;
+    return tween(Math.abs(to - from) * 7, id, (t) => {
+      state.x = from + (to - from) * t;
+      state.frame = Math.floor(state.x / 12);
+      placeAgent();
+    });
+  }
+  function fall(id) {
+    const top = state.y;
+    return tween(420, id, (t) => { state.y = top + 80 * t * t; placeAgent(1 - t); });
+  }
+  const show = (id, on) => $(id).setAttribute("opacity", on ? 1 : 0);
+  function reset() {
+    ["plank", "flag", "tomb", "sceneGhost", "say"].forEach((id) => show(id, false));
+    state = { x: 24, y: GROUND - 36, frame: 0 };
+    placeAgent();
+    $("tally").textContent = "";
+    $("pile").innerHTML = "";
+    $("sessionText").textContent = "";
+  }
+  const newSession = (n) => {
+    state = { x: 24, y: GROUND - 36, frame: 0 };
+    placeAgent();
+    $("sessionText").textContent = `session ${n}`;
+  };
+  const tally = (n) => {
+    $("tally").textContent = `times fallen: ${n}`;
+    // Every fall stays in the pit, because the pit is what you paid for.
+    $("pile").innerHTML = Array.from({ length: n }, (_, i) => `<g transform="translate(${PIT[0] + 22 + i * 26} ${GROUND + 34 - (i % 2) * 5}) rotate(${i % 2 ? 14 : -12})" shape-rendering="crispEdges">${pixels([...AGENT, ...LEGS[0]], "#6c7568", 1.5)}</g>`).join("");
+  };
+
+  async function without(id) {
+    for (let n = 1; n <= 3; n++) {
+      newSession(n);
+      caption.innerHTML = `Session ${n}: “I'll bump numpy to fix that warning.”`;
+      await walk(PIT[0] + 12, id);
+      await fall(id);
+      tally(n);
+      caption.innerHTML = `<span class="bad">ImportError. It broke torch.</span>`;
+      await wait(1100, id);
+      if (n < 3) {
+        caption.textContent = "Context compacted. The agent forgets it ever happened.";
+        await wait(1300, id);
+      }
+    }
+    caption.textContent = "Three sessions, one bad idea. You paid for all three.";
+  }
+  async function withIt(id) {
+    newSession(1);
+    caption.innerHTML = "Session 1: “I'll bump numpy to fix that warning.”";
+    await walk(PIT[0] + 12, id);
+    await fall(id);
+    tally(1);
+    caption.innerHTML = `It still fails once. This time it writes it down: <code>record_dead_end("Bumped numpy", "broke torch 2.1")</code>`;
+    show("tomb", true);
+    await wait(2200, id);
+    caption.textContent = "Context compacted. The agent forgets, but the file doesn't.";
+    await wait(1300, id);
+    newSession(2);
+    caption.innerHTML = `Session 2: checks first. <code>search_dead_ends("numpy")</code>`;
+    await walk(STONE_X - 62, id);
+    show("sceneGhost", true);
+    show("say", true);
+    await wait(2000, id);
+    show("sceneGhost", false);
+    show("say", false);
+    show("plank", true);
+    caption.textContent = "So it leaves numpy alone and tries an explicit dtype instead.";
+    await walk(700, id);
+    show("flag", true);
+    caption.textContent = "Fixed, and the pit only cost you once.";
+  }
+  function finalFrame(mode) {
+    reset();
+    if (mode === "with") {
+      ["plank", "flag", "tomb"].forEach((id) => show(id, true));
+      state.x = 680; placeAgent(); tally(1);
+      $("sessionText").textContent = "session 2";
+      caption.textContent = "One fall, one tombstone, and the next session walks across on a different fix.";
+    } else {
+      state.x = PIT[0] - 60; placeAgent(); tally(3);
+      $("sessionText").textContent = "session 3";
+      caption.textContent = "Three sessions, one bad idea. You paid for all three.";
+    }
+  }
+  function play(mode, chained) {
+    const id = ++run;
+    tabs.forEach((tab) => tab.setAttribute("aria-pressed", String(tab.dataset.mode === mode)));
+    if (REDUCED) return finalFrame(mode);
+    reset();
+    (mode === "with" ? withIt(id) : without(id))
+      .then(() => wait(1800, id))
+      .then(() => { if (chained && mode === "without") play("with", false); })
+      .catch(() => {});  // a newer run replaced this one
+  }
+  tabs.forEach((tab) => tab.addEventListener("click", () => play(tab.dataset.mode, false)));
+  finalFrame("without");
+  caption.textContent = "An illustration. Scroll here to watch it.";
+  new IntersectionObserver(([entry], observer) => {
+    if (entry.isIntersecting) { observer.disconnect(); play("without", true); }
+  }, { threshold: 0.45 }).observe(scene);
+})();
+
+document.querySelectorAll(".copy").forEach((button) => button.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(button.previousElementSibling.textContent);
+    button.textContent = "Copied";
+  } catch {
+    button.textContent = "Failed";
+  }
+  setTimeout(() => { button.textContent = "Copy"; }, 1600);
+}));
+</script>
+</body>
+</html>

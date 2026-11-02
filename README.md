@@ -4,6 +4,8 @@
 
 A log of dead ends for coding agents.
 
+**[ryanjmahn.github.io/graveyard](https://ryanjmahn.github.io/graveyard/)**
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/ryanjmahn/graveyard?style=flat&color=black)](https://github.com/ryanjmahn/graveyard/stargazers)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-black.svg)](https://www.python.org)
