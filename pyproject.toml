@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "graveyard"
 version = "0.0.1"
 description = "A per-repo log of failed approaches, so coding agents stop repeating them."
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["mcp>=2,<3"]
 

@@ -1,6 +1,7 @@
 import io
 import re
 import subprocess
+import sys
 
 import pytest
 
@@ -326,6 +327,42 @@ def test_stats_without_tags_or_areas(repo, capsys):
 def test_stats_empty(repo, capsys):
     assert cli.main(["stats"]) == 0
     assert "No dead ends yet" in capsys.readouterr().out
+
+
+# things going wrong
+
+
+def test_list_into_a_closed_pipe_exits_quietly(repo):
+    # Far more than a pipe buffers, so the write really does hit the closed end.
+    entries_path(repo).parent.mkdir()
+    line = '{"id": 1, "attempt": "%s", "why_failed": "x", "created_at": "2026-01-01T00:00:00+00:00"}\n' % ("a" * 200)
+    entries_path(repo).write_text(line * 2000)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "graveyard.cli", "list", "-n", "2000"],
+        cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    proc.stdout.readline()
+    proc.stdout.close()
+    stderr = proc.stderr.read()
+    proc.stderr.close()
+    assert proc.wait() == 0
+    assert stderr == b""
+
+
+def test_ctrl_c_during_add_saves_nothing(repo, monkeypatch, capsys):
+    def interrupted(_):
+        raise KeyboardInterrupt
+    monkeypatch.setattr("builtins.input", interrupted)
+    assert cli.main(["add"]) == 130
+    assert read_entries(repo) == []
+
+
+def test_disk_errors_are_a_message_not_a_traceback(repo, monkeypatch, capsys):
+    def denied(*a, **k):
+        raise PermissionError("read-only file system")
+    monkeypatch.setattr("graveyard.storage.append_entry", denied)
+    assert cli.main(["add", "--attempt", "a", "--why", "b"]) == 1
+    assert "read-only" in capsys.readouterr().err
 
 
 # display

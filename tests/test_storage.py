@@ -49,11 +49,13 @@ def test_find_repo_root_outside_repo(tmp_path):
         {"attempt": "x", "why_failed": ""},
         {"attempt": "x", "why_failed": "y", "status": "zombie"},
         {"attempt": "x", "why_failed": "y", "tags": "numpy"},
+        {"id": 0, "attempt": "x", "why_failed": "y"},
+        {"id": True, "attempt": "x", "why_failed": "y"},
     ],
 )
 def test_entry_validation(bad):
     with pytest.raises(ValueError):
-        Entry(id=1, **bad)
+        Entry(**{"id": 1, **bad})
 
 
 def test_read_missing_file_is_empty(tmp_path):
@@ -184,6 +186,13 @@ def test_revive_needs_a_note(tmp_path):
     with pytest.raises(ValueError):
         revive_entry(tmp_path, 1, "  ")
     assert read_entries(tmp_path)[0].status == "dead"
+
+
+def test_works_without_file_locking(tmp_path, monkeypatch):
+    # Windows has no fcntl
+    monkeypatch.setattr("graveyard.storage.fcntl", None)
+    add(tmp_path)
+    assert revive_entry(tmp_path, 1, "n").status == "revived"
 
 
 def _worker(root):
