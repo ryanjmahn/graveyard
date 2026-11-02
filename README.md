@@ -4,6 +4,7 @@
 
 A log of dead ends for coding agents.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/ryanjmahn/graveyard?style=flat&color=black)](https://github.com/ryanjmahn/graveyard/stargazers)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-black.svg)](https://www.python.org)
 [![Built with MCP](https://img.shields.io/badge/MCP-2-black.svg)](https://modelcontextprotocol.io)
@@ -167,3 +168,7 @@ Found a bug, or a dead end Graveyard should have caught? Open an issue or send a
 ## Credits
 
 Made by Ryan Ahn ([@ryanjmahn](https://github.com/ryanjmahn)).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
